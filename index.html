@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>동적 평형 시뮬레이션</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:linear-gradient(135deg,#080818,#0d1b2a,#12082a);
+  min-height:100vh;font-family:'Segoe UI',sans-serif;color:#fff;padding:16px;
+}
+.header{text-align:center;margin-bottom:14px;}
+.header h1{font-size:1.55rem;color:#7ecfff;text-shadow:0 0 18px #7ecfff88;margin-bottom:4px;}
+.header p{font-size:0.8rem;color:#7a9ab0;}
+.formula-row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.fb{background:rgba(255,255,255,0.05);border:1px solid rgba(126,207,255,0.2);
+  border-radius:9px;padding:7px 14px;font-size:0.82rem;color:#d0f0ff;text-align:center;}
+.fb small{font-size:0.68rem;color:#6a9ab0;display:block;margin-top:2px;}
+
+/* ══════════════ 속도 조절 패널 ══════════════ */
+.speed-panel{
+  max-width:960px;margin:0 auto 14px;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:12px;padding:12px 20px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:center;
+}
+.speed-panel-label{
+  font-size:0.82rem;color:#8ab4cc;font-weight:600;white-space:nowrap;
+}
+
+/* 속도 버튼 그룹 */
+.speed-btn-group{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
+.speed-btn{
+  padding:7px 14px;border:2px solid rgba(255,255,255,0.15);
+  border-radius:8px;font-size:0.8rem;font-weight:700;
+  cursor:pointer;transition:all 0.2s;
+  background:rgba(255,255,255,0.06);color:#9ac4d8;
+  white-space:nowrap;
+}
+.speed-btn:hover{transform:translateY(-2px);filter:brightness(1.25);}
+.speed-btn:active{transform:translateY(0);}
+.speed-btn.active{
+  background:rgba(126,207,255,0.18);
+  border-color:#7ecfff;color:#7ecfff;
+  box-shadow:0 0 10px rgba(126,207,255,0.25);
+}
+
+/* 일시정지 버튼 */
+.pause-btn{
+  padding:7px 20px;border:2px solid rgba(255,200,80,0.4);
+  border-radius:8px;font-size:0.85rem;font-weight:800;
+  cursor:pointer;transition:all 0.2s;
+  background:rgba(255,200,80,0.1);color:#ffcc66;
+  white-space:nowrap;min-width:110px;text-align:center;
+}
+.pause-btn:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(255,200,80,0.25);}
+.pause-btn.paused{
+  background:rgba(255,100,100,0.15);
+  border-color:#ff7777;color:#ff9999;
+  box-shadow:0 0 10px rgba(255,100,100,0.2);
+  animation:pausePulse 1.5s ease-in-out infinite;
+}
+@keyframes pausePulse{
+  0%,100%{box-shadow:0 0 8px rgba(255,100,100,0.2);}
+  50%{box-shadow:0 0 18px rgba(255,100,100,0.45);}
+}
+
+/* 속도 시각화 바 */
+.speed-vis{
+  display:flex;align-items:center;gap:8px;flex:1;min-width:160px;
+}
+.speed-vis-label{font-size:0.72rem;color:#6a9ab0;white-space:nowrap;}
+.speed-track{
+  flex:1;height:6px;background:rgba(255,255,255,0.08);
+  border-radius:3px;overflow:hidden;
+}
+.speed-fill{
+  height:100%;border-radius:3px;
+  background:linear-gradient(90deg,#4ecdc4,#7ecfff);
+  transition:width 0.3s ease;
+}
+.speed-val{
+  font-size:0.8rem;font-weight:700;color:#7ecfff;
+  min-width:36px;text-align:right;white-space:nowrap;
+}
+
+/* 스텝 버튼 (일시정지 중) */
+.step-btn{
+  padding:7px 14px;border:2px solid rgba(126,207,255,0.3);
+  border-radius:8px;font-size:0.8rem;font-weight:700;
+  cursor:pointer;transition:all 0.2s;
+  background:rgba(126,207,255,0.08);color:#7ecfff;
+  white-space:nowrap;opacity:0.4;pointer-events:none;
+}
+.step-btn.enabled{opacity:1;pointer-events:auto;}
+.step-btn.enabled:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(126,207,255,0.2);}
+
+/* ══════════════ 용액 탭 ══════════════ */
+.solution-tabs{
+  display:flex;justify-content:center;gap:8px;
+  flex-wrap:wrap;margin-bottom:14px;
+}
+.sol-btn{
+  padding:8px 16px;border:2px solid transparent;
+  border-radius:22px;font-size:0.82rem;font-weight:700;
+  cursor:pointer;transition:all 0.25s;
+  background:rgba(255,255,255,0.06);color:#aac8dd;
+}
+.sol-btn:hover{transform:translateY(-2px);filter:brightness(1.2);}
+.sol-btn.active{color:#fff;transform:translateY(-2px);
+  box-shadow:0 4px 16px rgba(0,0,0,0.5);}
+.sol-info-bar{
+  max-width:960px;margin:0 auto 14px;border-radius:12px;
+  padding:12px 20px;border:1px solid rgba(255,255,255,0.12);
+  display:flex;gap:16px;flex-wrap:wrap;align-items:center;
+  justify-content:center;transition:all 0.4s;
+}
+.sol-info-bar .sol-title{font-size:1.1rem;font-weight:800;margin-right:4px;}
+.sol-info-bar .sol-eq{font-size:0.85rem;color:#d8f0ff;
+  background:rgba(0,0,0,0.25);padding:4px 12px;border-radius:8px;}
+.sol-chip{font-size:0.73rem;padding:3px 10px;border-radius:12px;
+  background:rgba(255,255,255,0.1);color:#cce8ff;}
+
+/* ══════════════ 메인 레이아웃 ══════════════ */
+.main-layout{
+  display:flex;gap:18px;justify-content:center;
+  flex-wrap:wrap;align-items:flex-start;
+  max-width:1000px;margin:0 auto;
+}
+.control-panel{width:220px;display:flex;flex-direction:column;gap:12px;}
+.ctrl-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+  border-radius:12px;padding:14px;}
+.ctrl-card h3{font-size:0.82rem;color:#ffcc66;margin-bottom:10px;text-align:center;}
+.temp-badge{font-size:1.9rem;font-weight:900;text-align:center;display:block;
+  margin-bottom:6px;transition:color 0.4s;text-shadow:0 0 16px currentColor;}
+input[type=range]{-webkit-appearance:none;width:100%;height:7px;
+  border-radius:4px;outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;
+  border-radius:50%;border:2.5px solid #fff;cursor:pointer;
+  box-shadow:0 0 6px rgba(0,0,0,0.6);}
+.temp-range-labels{display:flex;justify-content:space-between;
+  font-size:0.65rem;color:#5a7a8a;margin-top:3px;}
+.mini-stats{display:flex;flex-direction:column;gap:5px;margin-top:8px;}
+.mini-stat{background:rgba(0,0,0,0.3);border-radius:7px;padding:6px 10px;
+  font-size:0.75rem;display:flex;justify-content:space-between;align-items:center;
+  border:1px solid rgba(255,255,255,0.07);}
+.mini-stat .ml{color:#7ecfff;}
+.mini-stat .mv{font-weight:700;}
+.lid-btn{width:100%;padding:11px;border:none;border-radius:10px;
+  font-size:0.9rem;font-weight:800;cursor:pointer;transition:all 0.2s;letter-spacing:0.5px;}
+.lid-btn.closed{background:linear-gradient(135deg,#1a6a3a,#0d4425);
+  color:#5fffaa;border:1px solid #5fffaa44;}
+.lid-btn.open{background:linear-gradient(135deg,#6a1a1a,#441010);
+  color:#ff8888;border:1px solid #ff888844;}
+.lid-btn:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,0.5);}
+.reset-btn{width:100%;padding:8px;border:none;border-radius:8px;
+  font-size:0.8rem;font-weight:700;cursor:pointer;
+  background:rgba(255,255,255,0.08);color:#aac8dd;
+  border:1px solid rgba(255,255,255,0.12);transition:all 0.2s;}
+.reset-btn:hover{background:rgba(255,255,255,0.13);transform:translateY(-1px);}
+.state-badge{text-align:center;padding:7px;border-radius:8px;
+  font-size:0.8rem;font-weight:700;transition:all 0.4s;}
+.state-eq{background:#5fffaa18;color:#5fffaa;border:1px solid #5fffaa33;}
+.state-ev{background:#ff6b6b18;color:#ff9a9a;border:1px solid #ff6b6b33;}
+.state-cn{background:#4ecdc418;color:#4ecdc4;border:1px solid #4ecdc433;}
+.state-pause{background:rgba(255,200,80,0.12);color:#ffcc66;
+  border:1px solid rgba(255,200,80,0.3);}
+
+/* 병 */
+.bottle-section{display:flex;flex-direction:column;align-items:center;gap:10px;}
+.bottle-wrapper{position:relative;width:200px;height:340px;}
+.particle-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+
+/* 일시정지 오버레이 */
+.pause-overlay{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.45);border-radius:8px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:10;
+}
+.pause-overlay.show{opacity:1;}
+.pause-overlay .po-icon{font-size:2.8rem;margin-bottom:6px;
+  filter:drop-shadow(0 0 12px rgba(255,200,80,0.8));}
+.pause-overlay .po-text{font-size:0.85rem;color:#ffcc66;font-weight:700;
+  text-shadow:0 0 8px rgba(255,200,80,0.6);}
+
+/* 그래프 */
+.graph-panel{width:320px;display:flex;flex-direction:column;gap:12px;}
+.graph-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);
+  border-radius:12px;padding:12px;}
+.graph-card h3{font-size:0.78rem;color:#7ecfff;margin-bottom:8px;text-align:center;}
+.graph-card canvas{width:100%;height:130px;display:block;background:rgba(0,0,0,0.3);
+  border-radius:7px;border:1px solid rgba(255,255,255,0.06);}
+.keq-graph-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,200,80,0.2);
+  border-radius:12px;padding:12px;}
+.keq-graph-card h3{font-size:0.78rem;color:#ffcc66;margin-bottom:8px;text-align:center;}
+.keq-graph-card canvas{width:100%;height:130px;display:block;background:rgba(0,0,0,0.3);
+  border-radius:7px;border:1px solid rgba(255,255,255,0.06);}
+.legend{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;
+  margin-top:6px;font-size:0.68rem;color:#9ac4d8;}
+.li{display:flex;align-items:center;gap:4px;}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.rate-section{margin-top:2px;}
+.rate-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+.rate-lbl{font-size:0.7rem;width:52px;flex-shrink:0;color:#9ac4d8;}
+.rate-bg{flex:1;height:14px;background:rgba(255,255,255,0.07);border-radius:4px;overflow:hidden;}
+.rate-fill{height:100%;border-radius:4px;transition:width 0.4s;
+  display:flex;align-items:center;padding-left:5px;
+  font-size:0.62rem;font-weight:700;color:#fff;white-space:nowrap;}
+.rf-evap{background:linear-gradient(90deg,#ff9a3c,#ff6b6b);}
+.rf-cond{background:linear-gradient(90deg,#4ecdc4,#45b7d1);}
+.concept-panel{max-width:960px;margin:14px auto 0;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(126,207,255,0.15);
+  border-radius:12px;padding:14px 20px;
+  font-size:0.76rem;line-height:1.85;color:#b8d8ee;}
+.concept-panel h3{color:#7ecfff;font-size:0.88rem;margin-bottom:7px;}
+.concept-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}
+.concept-box{background:rgba(0,0,0,0.2);border-radius:8px;padding:9px 12px;
+  border:1px solid rgba(255,255,255,0.06);}
+.concept-box .cb-title{font-size:0.78rem;font-weight:700;margin-bottom:4px;}
+.hl{color:#ffe06e;font-weight:600;}
+.hl2{color:#7eff9a;font-weight:600;}
+.hl3{color:#ff9a9a;font-weight:600;}
+.bottle-wrapper{transition:filter 0.4s;}
+.switching{filter:brightness(1.5) blur(2px);}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🧪 가역 반응과 동적 평형 시뮬레이션</h1>
+  <p>용액 선택 · 온도 조절 · 뚜껑 개폐 · 속도 조절로 평형 원리 탐구</p>
+</div>
+
+<div class="formula-row">
+  <div class="fb">A(l) ⇌ A(g)<small>가역 반응</small></div>
+  <div class="fb">K<sub>eq</sub> = [A(g)]/[A(l)]<small>평형 상수</small></div>
+  <div class="fb">v<sub>증발</sub> = v<sub>응결</sub><small>동적 평형 조건</small></div>
+  <div class="fb">ln(K₂/K₁)=−ΔH/R·(1/T₂−1/T₁)<small>반트호프 방정식</small></div>
+</div>
+
+<!-- ══ 속도 조절 패널 ══ -->
+<div class="speed-panel">
+  <span class="speed-panel-label">⏱ 시뮬레이션 속도</span>
+
+  <div class="speed-btn-group">
+    <button class="speed-btn" id="spd-01" onclick="setSpeed(0.25)">🐢 0.25×</button>
+    <button class="speed-btn" id="spd-02" onclick="setSpeed(0.5)">🐌 0.5×</button>
+    <button class="speed-btn active" id="spd-1" onclick="setSpeed(1)">▶ 1× 표준</button>
+    <button class="speed-btn" id="spd-2" onclick="setSpeed(2)">⚡ 2×</button>
+    <button class="speed-btn" id="spd-4" onclick="setSpeed(4)">🚀 4×</button>
+    <button class="speed-btn" id="spd-8" onclick="setSpeed(8)">💥 8×</button>
+  </div>
+
+  <div class="speed-vis">
+    <span class="speed-vis-label">속도</span>
+    <div class="speed-track">
+      <div class="speed-fill" id="speed-fill" style="width:12.5%"></div>
+    </div>
+    <span class="speed-val" id="speed-val-label">1×</span>
+  </div>
+
+  <button class="step-btn" id="step-btn" onclick="doStep()">⏭ 1스텝</button>
+  <button class="pause-btn" id="pause-btn" onclick="togglePause()">⏸ 일시정지</button>
+</div>
+
+<!-- 용액 선택 탭 -->
+<div class="solution-tabs" id="sol-tabs"></div>
+
+<!-- 용액 정보 배너 -->
+<div class="sol-info-bar" id="sol-info-bar">
+  <span class="sol-title" id="si-title">—</span>
+  <span class="sol-eq" id="si-eq">—</span>
+  <span class="sol-chip" id="si-bp">—</span>
+  <span class="sol-chip" id="si-dh">—</span>
+  <span class="sol-chip" id="si-desc">—</span>
+</div>
+
+<!-- 메인 레이아웃 -->
+<div class="main-layout">
+
+  <!-- 왼쪽 컨트롤 -->
+  <div class="control-panel">
+    <div class="ctrl-card">
+      <h3>🌡️ 온도 조절</h3>
+      <span class="temp-badge" id="temp-badge">25°C</span>
+      <input type="range" id="temp-slider" min="0" max="150" value="25" step="1"
+             oninput="onTempChange(this.value)"/>
+      <div class="temp-range-labels"><span>0°C</span><span>75°C</span><span>150°C</span></div>
+      <div class="mini-stats">
+        <div class="mini-stat"><span class="ml">T (K)</span>
+          <span class="mv" id="ms-kelvin">298 K</span></div>
+        <div class="mini-stat"><span class="ml">K<sub>eq</sub></span>
+          <span class="mv" id="ms-keq" style="color:#ffe06e">—</span></div>
+        <div class="mini-stat"><span class="ml">증발 계수</span>
+          <span class="mv" id="ms-ef" style="color:#ff9a9a">—</span></div>
+        <div class="mini-stat"><span class="ml">응결 계수</span>
+          <span class="mv" id="ms-cf" style="color:#9adfff">—</span></div>
+      </div>
+    </div>
+
+    <div class="ctrl-card">
+      <h3>🔬 용기 조절</h3>
+      <button class="lid-btn closed" id="lid-btn" onclick="toggleLid()">
+        🔒 뚜껑 닫힘 — 클릭하여 열기
+      </button>
+      <div class="state-badge state-ev" id="state-badge" style="margin-top:8px;">
+        ⏳ 증발 진행 중...
+      </div>
+    </div>
+
+    <div class="ctrl-card">
+      <h3>📊 실시간 수치</h3>
+      <div class="mini-stats">
+        <div class="mini-stat"><span class="ml">💧 액체</span>
+          <span class="mv" id="ms-liq">—</span></div>
+        <div class="mini-stat"><span class="ml">☁️ 기체</span>
+          <span class="mv" id="ms-gas">—</span></div>
+        <div class="mini-stat"><span class="ml">📈 증발 속도</span>
+          <span class="mv" id="ms-evap" style="color:#ff9a3c">—</span></div>
+        <div class="mini-stat"><span class="ml">📉 응결 속도</span>
+          <span class="mv" id="ms-cond" style="color:#4ecdc4">—</span></div>
+      </div>
+      <div class="rate-section" style="margin-top:8px;">
+        <div class="rate-row">
+          <span class="rate-lbl">증발</span>
+          <div class="rate-bg"><div class="rate-fill rf-evap" id="rb-evap" style="width:0%"></div></div>
+        </div>
+        <div class="rate-row">
+          <span class="rate-lbl">응결</span>
+          <div class="rate-bg"><div class="rate-fill rf-cond" id="rb-cond" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="reset-btn" onclick="resetSim()">🔄 실험 초기화</button>
+  </div>
+
+  <!-- 가운데: 병 -->
+  <div class="bottle-section">
+    <div class="bottle-wrapper" id="bottle-wrapper">
+      <canvas id="main-canvas" class="particle-canvas"
+              style="position:static;width:100%;height:100%;"></canvas>
+      <!-- 일시정지 오버레이 -->
+      <div class="pause-overlay" id="pause-overlay">
+        <div class="po-icon">⏸</div>
+        <div class="po-text">일시정지</div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:0.72rem;color:#6a9ab0;line-height:1.7;">
+      <div id="quick-info">온도를 올리거나 뚜껑을 열어 실험해보세요</div>
+    </div>
+    <!-- 속도 인디케이터 (병 하단) -->
+    <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
+      <div id="speed-dots" style="display:flex;gap:4px;"></div>
+      <span id="speed-indicator-text"
+            style="font-size:0.72rem;color:#7ecfff;font-weight:700;"></span>
+    </div>
+  </div>
+
+  <!-- 오른쪽: 그래프 -->
+  <div class="graph-panel">
+    <div class="graph-card">
+      <h3>📈 분자 수 변화</h3>
+      <canvas id="gc-mol"></canvas>
+      <div class="legend">
+        <div class="li"><div class="ld" id="leg-liq-dot"></div>
+          <span id="leg-liq-txt">액체</span></div>
+        <div class="li"><div class="ld" id="leg-gas-dot"></div>
+          <span id="leg-gas-txt">기체</span></div>
+      </div>
+    </div>
+    <div class="graph-card">
+      <h3>⚡ 반응 속도 변화</h3>
+      <canvas id="gc-rate"></canvas>
+      <div class="legend">
+        <div class="li"><div class="ld" style="background:#ff9a3c"></div>증발 속도</div>
+        <div class="li"><div class="ld" style="background:#4ecdc4"></div>응결 속도</div>
+      </div>
+    </div>
+    <div class="keq-graph-card">
+      <h3>🌡️ 평형 상수 K vs 온도</h3>
+      <canvas id="gc-keq"></canvas>
+      <div class="legend" style="color:#c8aa66;">
+        <div class="li"><div class="ld" style="background:#ffcc66"></div>K(T) 곡선</div>
+        <div class="li"><div class="ld" style="background:#ff5555;border-radius:2px;"></div>
+          현재 온도</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 개념 패널 -->
+<div class="concept-panel">
+  <h3>📚 핵심 개념</h3>
+  <div class="concept-grid">
+    <div class="concept-box">
+      <div class="cb-title" style="color:#7ecfff;">⚖ 동적 평형</div>
+      밀폐 용기에서 <span class="hl2">증발 속도 = 응결 속도</span>가 되면 동적 평형 달성.
+      겉으로는 변화 없어 보이나 미시적으로는 양방향 반응 지속.
+    </div>
+    <div class="concept-box">
+      <div class="cb-title" style="color:#ffcc66;">🌡️ 온도와 K</div>
+      <span class="hl">흡열 반응</span>: 온도↑ → K↑.
+      반트호프 방정식으로 계산.
+      <span class="hl3">비등점</span> 도달 시 증발 급격히 가속.
+    </div>
+    <div class="concept-box">
+      <div class="cb-title" style="color:#7eff9a;">🔓 개방 용기</div>
+      기체 탈출 → 응결 불가 →
+      <span class="hl3">평형 도달 불가</span>.
+      르샤틀리에: 기체 감소 → 정반응 촉진 → 지속 증발.
+    </div>
+    <div class="concept-box">
+      <div class="cb-title" style="color:#ff9a9a;">🧪 물질별 차이</div>
+      끓는점이 낮을수록 증발 빠름.
+      ΔH 클수록 온도 변화에 따른 K 변화 폭이 큼.
+      <span class="hl">속도 조절</span>로 평형 과정을 천천히 관찰 가능.
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  용액 데이터베이스
+// ══════════════════════════════════════════════════
+const SOLUTIONS = [
+  { id:'water',    name:'물',           emoji:'💧',
+    formula:'H₂O(l) ⇌ H₂O(g)',
+    bp:100,   dh:44000, ea_evap:44000, ea_cond:5000,
+    T_ref:298.15, K_ref:0.032,
+    color_liq:['#60c8ff','#1a6ac8'], color_gas:['rgba(200,235,255,0.9)','rgba(140,200,255,0.1)'],
+    color_theme:'#4aaeff', border_color:'rgba(80,180,255,0.4)',
+    bg_grad:['rgba(20,60,120,0.3)','rgba(255,160,60,0.2)'],
+    tab_color:'#4aaeff', tab_bg:'rgba(40,100,200,0.25)',
+    desc:'수소 결합으로 끓는점이 높음.',
+    evap_base:0.035, cond_k:0.0010 },
+  { id:'ethanol',  name:'에탄올',       emoji:'🍺',
+    formula:'C₂H₅OH(l) ⇌ C₂H₅OH(g)',
+    bp:78,    dh:38600, ea_evap:38600, ea_cond:4500,
+    T_ref:298.15, K_ref:0.058,
+    color_liq:['#d4a8ff','#7a30cc'], color_gas:['rgba(230,200,255,0.9)','rgba(160,120,220,0.1)'],
+    color_theme:'#b06aff', border_color:'rgba(160,100,255,0.4)',
+    bg_grad:['rgba(60,20,100,0.3)','rgba(200,120,255,0.2)'],
+    tab_color:'#c088ff', tab_bg:'rgba(120,40,200,0.25)',
+    desc:'알코올. 수소 결합 있으나 물보다 약해 끓는점 낮음.',
+    evap_base:0.055, cond_k:0.0013 },
+  { id:'ether',    name:'에테르',       emoji:'⚗️',
+    formula:'(C₂H₅)₂O(l) ⇌ (C₂H₅)₂O(g)',
+    bp:34.6,  dh:26500, ea_evap:26500, ea_cond:3500,
+    T_ref:298.15, K_ref:0.140,
+    color_liq:['#a8ffda','#20a860'], color_gas:['rgba(180,255,220,0.9)','rgba(100,220,160,0.1)'],
+    color_theme:'#40e090', border_color:'rgba(60,220,140,0.4)',
+    bg_grad:['rgba(10,60,40,0.3)','rgba(80,240,160,0.2)'],
+    tab_color:'#40e090', tab_bg:'rgba(20,120,70,0.25)',
+    desc:'매우 낮은 끓는점. 휘발성 강함.',
+    evap_base:0.090, cond_k:0.0018 },
+  { id:'acetone',  name:'아세톤',       emoji:'🧴',
+    formula:'CH₃COCH₃(l) ⇌ CH₃COCH₃(g)',
+    bp:56,    dh:31300, ea_evap:31300, ea_cond:4000,
+    T_ref:298.15, K_ref:0.095,
+    color_liq:['#fff4a0','#c8a820'], color_gas:['rgba(255,248,180,0.9)','rgba(220,200,80,0.1)'],
+    color_theme:'#e8c830', border_color:'rgba(230,200,60,0.4)',
+    bg_grad:['rgba(60,50,10,0.3)','rgba(240,220,80,0.2)'],
+    tab_color:'#e8c830', tab_bg:'rgba(120,100,10,0.25)',
+    desc:'네일리무버 주성분. 빠른 증발.',
+    evap_base:0.072, cond_k:0.0015 },
+  { id:'glycerol', name:'글리세롤',     emoji:'🫙',
+    formula:'C₃H₅(OH)₃(l) ⇌ C₃H₅(OH)₃(g)',
+    bp:290,   dh:85700, ea_evap:85700, ea_cond:9000,
+    T_ref:298.15, K_ref:0.0008,
+    color_liq:['#ffd0a0','#c86030'], color_gas:['rgba(255,210,170,0.9)','rgba(200,140,80,0.1)'],
+    color_theme:'#e07840', border_color:'rgba(220,140,80,0.4)',
+    bg_grad:['rgba(60,30,10,0.3)','rgba(220,140,60,0.2)'],
+    tab_color:'#e07840', tab_bg:'rgba(120,60,20,0.25)',
+    desc:'수소 결합 3개. 끓는점 매우 높음.',
+    evap_base:0.008, cond_k:0.0005 },
+  { id:'mercury',  name:'수은',         emoji:'🪨',
+    formula:'Hg(l) ⇌ Hg(g)',
+    bp:356.7, dh:59200, ea_evap:59200, ea_cond:7000,
+    T_ref:298.15, K_ref:0.0004,
+    color_liq:['#e8e8f8','#8888bb'], color_gas:['rgba(220,220,240,0.85)','rgba(150,150,190,0.1)'],
+    color_theme:'#aaaacc', border_color:'rgba(180,180,220,0.4)',
+    bg_grad:['rgba(30,30,50,0.3)','rgba(160,160,200,0.2)'],
+    tab_color:'#b8b8dd', tab_bg:'rgba(60,60,100,0.25)',
+    desc:'금속 액체. 극히 낮은 증기압.',
+    evap_base:0.004, cond_k:0.0004 }
+];
+
+// ══════════════════════════════════════════════════
+//  물리 상수
+// ══════════════════════════════════════════════════
+const R_GAS = 8.314;
+
+function calcKeq(sol,T_c){
+  const T=T_c+273.15;
+  return sol.K_ref*Math.exp(-sol.dh/R_GAS*(1/T-1/sol.T_ref));
+}
+function evapFactor(sol,T_c){
+  const T=T_c+273.15;
+  return Math.exp(-sol.ea_evap/R_GAS*(1/T-1/sol.T_ref));
+}
+function condFactor(sol,T_c){
+  const T=T_c+273.15;
+  return Math.exp(-sol.ea_cond/R_GAS*(1/T-1/sol.T_ref));
+}
+
+// ══════════════════════════════════════════════════
+//  시뮬레이션 상태
+// ══════════════════════════════════════════════════
+const MAX_LIQ  = 180;
+const MAX_GAS  = 75;
+const HIST_LEN = 200;
+const GAS_ESC  = 0.22;
+
+// ── 속도 관련 상태 ──
+let simSpeed   = 1;      // 현재 배속 (0.25 / 0.5 / 1 / 2 / 4 / 8)
+let isPaused   = false;  // 일시정지 여부
+const BASE_MS  = 300;    // 1× 기준 스텝 간격 (ms)
+
+// 속도별 설정 맵
+const SPEED_MAP = {
+  0.25: { id:'spd-01', label:'🐢 0.25×', fillPct: 3  },
+  0.5:  { id:'spd-02', label:'🐌 0.5×',  fillPct: 6  },
+  1:    { id:'spd-1',  label:'▶ 1×',     fillPct: 12 },
+  2:    { id:'spd-2',  label:'⚡ 2×',    fillPct: 25 },
+  4:    { id:'spd-4',  label:'🚀 4×',    fillPct: 50 },
+  8:    { id:'spd-8',  label:'💥 8×',    fillPct: 100}
+};
+
+let curSolIdx = 0;
+let TEMP_C    = 25;
+let lidOpen   = false;
+
+let simState = {
+  liquid:130, gas:0, evapRate:0, condRate:0,
+  particles:[],
+  history:{ liquid:[], gas:[], evap:[], cond:[] }
+};
+
+// ══════════════════════════════════════════════════
+//  캔버스
+// ══════════════════════════════════════════════════
+const mainCanvas = document.getElementById('main-canvas');
+const mainCtx    = mainCanvas.getContext('2d');
+const gcMol      = document.getElementById('gc-mol');
+const gcRate     = document.getElementById('gc-rate');
+const gcKeq      = document.getElementById('gc-keq');
+const ctxMol     = gcMol.getContext('2d');
+const ctxRate    = gcRate.getContext('2d');
+const ctxKeq     = gcKeq.getContext('2d');
+
+function resizeAll(){
+  const bw = document.getElementById('bottle-wrapper');
+  mainCanvas.width  = bw.offsetWidth;
+  mainCanvas.height = bw.offsetHeight;
+  [gcMol,gcRate,gcKeq].forEach(c=>{c.width=c.offsetWidth;c.height=c.offsetHeight;});
+}
+window.addEventListener('resize', resizeAll);
+setTimeout(resizeAll, 100);
+
+// ══════════════════════════════════════════════════
+//  속도 조절 함수들
+// ══════════════════════════════════════════════════
+function setSpeed(s){
+  simSpeed = s;
+  // 일시정지 상태였으면 해제
+  if(isPaused){ isPaused=false; applyPauseUI(); }
+
+  // 버튼 active 업데이트
+  Object.keys(SPEED_MAP).forEach(k=>{
+    const btn = document.getElementById(SPEED_MAP[k].id);
+    if(btn) btn.classList.toggle('active', parseFloat(k)===s);
+  });
+
+  // 속도 바 & 라벨
+  const cfg = SPEED_MAP[s];
+  document.getElementById('speed-fill').style.width  = cfg.fillPct+'%';
+  document.getElementById('speed-val-label').textContent = s+'×';
+
+  // 속도 인디케이터 (점)
+  updateSpeedDots();
+}
+
+function togglePause(){
+  isPaused = !isPaused;
+  applyPauseUI();
+}
+
+function applyPauseUI(){
+  const btn     = document.getElementById('pause-btn');
+  const overlay = document.getElementById('pause-overlay');
+  const stepBtn = document.getElementById('step-btn');
+  const sb      = document.getElementById('state-badge');
+
+  if(isPaused){
+    btn.textContent = '▶ 재생';
+    btn.classList.add('paused');
+    overlay.classList.add('show');
+    stepBtn.classList.add('enabled');
+    sb.textContent = '⏸ 일시정지됨';
+    sb.className   = 'state-badge state-pause';
+  } else {
+    btn.textContent = '⏸ 일시정지';
+    btn.classList.remove('paused');
+    overlay.classList.remove('show');
+    stepBtn.classList.remove('enabled');
+  }
+  updateSpeedDots();
+}
+
+// 1스텝 수동 진행 (일시정지 중)
+function doStep(){
+  if(!isPaused) return;
+  runSimStep();
+  updateUI();
+  drawAllGraphs();
+}
+
+// 속도 점 인디케이터
+function updateSpeedDots(){
+  const levels = [0.25,0.5,1,2,4,8];
+  const colors = ['#6ee7ff','#88ddff','#7ecfff','#ffdd88','#ff9944','#ff4444'];
+  const dots   = document.getElementById('speed-dots');
+  const txt    = document.getElementById('speed-indicator-text');
+  dots.innerHTML = '';
+
+  if(isPaused){
+    txt.textContent = '⏸ 일시정지';
+    txt.style.color = '#ffcc66';
+    for(let i=0;i<6;i++){
+      const d=document.createElement('div');
+      d.style.cssText=`width:8px;height:8px;border-radius:50%;
+        background:rgba(255,200,80,0.25);border:1px solid rgba(255,200,80,0.3);`;
+      dots.appendChild(d);
+    }
+    return;
+  }
+
+  const idx = levels.indexOf(simSpeed);
+  txt.textContent = simSpeed+'× 속도';
+  txt.style.color = colors[idx] || '#7ecfff';
+
+  levels.forEach((lv,i)=>{
+    const d = document.createElement('div');
+    const on = i <= idx;
+    d.style.cssText=`width:8px;height:8px;border-radius:50%;transition:all 0.3s;
+      background:${on?colors[i]:'rgba(255,255,255,0.1)'};
+      box-shadow:${on?`0 0 6px ${colors[i]}`:'none'};`;
+    dots.appendChild(d);
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  파티클
+// ══════════════════════════════════════════════════
+class Particle{
+  constructor(type){ this.type=type; this.init(); }
+  init(){
+    const cw=mainCanvas.width||200, ch=mainCanvas.height||340;
+    const ll=liquidLevel(), lt=ch-ll;
+    const spd=0.5+Math.min(TEMP_C/35,3.0);
+    if(this.type==='liquid'){
+      this.x=18+Math.random()*(cw-36);
+      this.y=lt+4+Math.random()*(ll-12);
+      this.vx=(Math.random()-0.5)*spd*0.9;
+      this.vy=(Math.random()-0.5)*spd*0.9;
+      this.r=4+Math.random()*2.5; this.alpha=0.72+Math.random()*0.28;
+    } else {
+      this.x=18+Math.random()*(cw-36);
+      this.y=lt*Math.random()*0.9;
+      this.vx=(Math.random()-0.5)*spd*1.5;
+      this.vy=-(0.4+Math.random()*0.9)*spd*0.8;
+      this.r=3+Math.random()*2; this.alpha=0.5+Math.random()*0.35;
+      this.life=0.7+Math.random()*0.3;
+    }
+  }
+  update(){
+    // 일시정지 중에는 파티클도 멈춤
+    if(isPaused) return;
+    const cw=mainCanvas.width, ch=mainCanvas.height;
+    const ll=liquidLevel(), lt=ch-ll;
+    const spd=(0.5+Math.min(TEMP_C/35,3.0))*Math.min(simSpeed,2);
+    this.x+=this.vx; this.y+=this.vy;
+    if(this.type==='liquid'){
+      if(this.x<18){this.x=18;this.vx*=-1;}
+      if(this.x>cw-18){this.x=cw-18;this.vx*=-1;}
+      if(this.y<lt+3){this.y=lt+3;this.vy*=-1;}
+      if(this.y>ch-6){this.y=ch-6;this.vy*=-1;}
+      this.vx+=(Math.random()-0.5)*0.13*spd;
+      this.vy+=(Math.random()-0.5)*0.13*spd;
+      const mx=1.0*spd;
+      this.vx=Math.max(-mx,Math.min(mx,this.vx));
+      this.vy=Math.max(-mx,Math.min(mx,this.vy));
+    } else {
+      this.vx+=(Math.random()-0.5)*0.09*spd;
+      if(this.x<18){this.x=18;this.vx*=-1;}
+      if(this.x>cw-18){this.x=cw-18;this.vx*=-1;}
+      if(!lidOpen){ if(this.y<5){this.y=5;this.vy*=-1;} }
+      if(this.y>lt-3){this.vy=-Math.abs(this.vy)-0.3*spd;}
+      this.life-=0.003*Math.min(simSpeed,2);
+    }
+  }
+  draw(ctx){
+    const sol=SOLUTIONS[curSolIdx];
+    const t01=Math.min(TEMP_C/100,1);
+    ctx.save();
+    const a=this.alpha*(this.type==='gas'?Math.max(0,this.life):1);
+    ctx.globalAlpha=Math.max(0,a);
+    if(this.type==='liquid'){
+      const c1=warmColor(sol.color_liq[0],t01);
+      const c2=warmColor(sol.color_liq[1],t01);
+      const g=ctx.createRadialGradient(this.x-1,this.y-1,0.5,this.x,this.y,this.r);
+      g.addColorStop(0,c1); g.addColorStop(1,c2);
+      ctx.fillStyle=g;
+      if(TEMP_C>60&&Math.random()<0.015){
+        ctx.strokeStyle=hexToRgba(rgbToHex(warmColor(sol.color_theme,0.3)),0.3);
+        ctx.lineWidth=1;
+        ctx.beginPath();ctx.arc(this.x,this.y,this.r+3+Math.random()*3,0,Math.PI*2);ctx.stroke();
+      }
+    } else {
+      const g=ctx.createRadialGradient(this.x-1,this.y-1,0.5,this.x,this.y,this.r);
+      g.addColorStop(0,sol.color_gas[0]); g.addColorStop(1,sol.color_gas[1]);
+      ctx.fillStyle=g;
+    }
+    ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+}
+
+function hexToRgba(hex,a){
+  if(!hex||!hex.startsWith('#')) return `rgba(128,128,128,${a})`;
+  const r=parseInt(hex.slice(1,3),16);
+  const g=parseInt(hex.slice(3,5),16);
+  const b=parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function warmColor(hex,t){
+  if(!hex||!hex.startsWith('#')) return hex||'#888';
+  let r=parseInt(hex.slice(1,3),16);
+  let g=parseInt(hex.slice(3,5),16);
+  let b=parseInt(hex.slice(5,7),16);
+  r=Math.min(255,r+Math.round(t*40));
+  g=Math.max(0,g-Math.round(t*20));
+  return `rgb(${r},${g},${b})`;
+}
+function rgbToHex(rgb){
+  if(!rgb) return '#888888';
+  if(rgb.startsWith('#')) return rgb;
+  const m=rgb.match(/\d+/g);
+  if(!m) return '#888888';
+  return '#'+m.slice(0,3).map(v=>parseInt(v).toString(16).padStart(2,'0')).join('');
+}
+
+function liquidLevel(){
+  const ch=mainCanvas.height||340;
+  return Math.max(8,(simState.liquid/MAX_LIQ)*(ch*0.52));
+}
+
+function initParticles(){
+  simState.particles=[];
+  const nL=Math.min(simState.liquid,90);
+  const nG=Math.min(simState.gas,40);
+  for(let i=0;i<nL;i++) simState.particles.push(new Particle('liquid'));
+  for(let i=0;i<nG;i++) simState.particles.push(new Particle('gas'));
+}
+
+// ══════════════════════════════════════════════════
+//  병 그리기
+// ══════════════════════════════════════════════════
+function drawBottle(){
+  const cw=mainCanvas.width, ch=mainCanvas.height;
+  const ctx=mainCtx;
+  const sol=SOLUTIONS[curSolIdx];
+  const t01=Math.min(TEMP_C/100,1);
+  const ll=liquidLevel(), lt=ch-ll;
+  ctx.clearRect(0,0,cw,ch);
+  const bx=14,by=44,bw=cw-28,bh=ch-58;
+
+  // 병 배경
+  ctx.fillStyle='rgba(6,12,28,0.6)';
+  ctx.beginPath();ctx.roundRect(bx+1,by+1,bw-2,bh-2,[6,6,12,12]);ctx.fill();
+
+  // 액체
+  if(simState.liquid>0){
+    const gr=ctx.createLinearGradient(0,lt,0,ch);
+    gr.addColorStop(0,hexToRgba(rgbToHex(warmColor(sol.color_liq[0],t01*0.6)),0.50));
+    gr.addColorStop(1,hexToRgba(rgbToHex(warmColor(sol.color_liq[1],t01*0.4)),0.82));
+    ctx.fillStyle=gr;
+    ctx.beginPath();
+    ctx.moveTo(bx+2,lt);ctx.lineTo(bx+bw-2,lt);
+    ctx.lineTo(bx+bw-2,by+bh-10);
+    ctx.quadraticCurveTo(bx+bw-2,by+bh+2,bx+bw-12,by+bh+2);
+    ctx.lineTo(bx+12,by+bh+2);
+    ctx.quadraticCurveTo(bx+2,by+bh+2,bx+2,by+bh-10);
+    ctx.lineTo(bx+2,lt);ctx.fill();
+
+    // 물결 (일시정지 시 멈춤)
+    const wAmp=1.5+t01*5;
+    const wSpd=isPaused?0:(0.002+t01*0.01)*simSpeed;
+    ctx.strokeStyle=hexToRgba(rgbToHex(warmColor(sol.color_liq[0],t01)),0.5);
+    ctx.lineWidth=1.8;ctx.beginPath();
+    for(let wx=bx+4;wx<=bx+bw-4;wx+=4){
+      const wy=lt+Math.sin((wx+Date.now()*wSpd)*0.45)*wAmp*(isPaused?0.2:1);
+      wx===bx+4?ctx.moveTo(wx,wy):ctx.lineTo(wx,wy);
+    }
+    ctx.stroke();
+
+    // 비등 기포
+    const bpFrac=Math.max(0,(TEMP_C-sol.bp*0.75)/(sol.bp*0.25));
+    if(!isPaused&&bpFrac>0&&Math.random()<bpFrac*0.35*Math.min(simSpeed,2)){
+      const bx2=bx+16+Math.random()*(bw-32);
+      const by2=lt+ll*0.2+Math.random()*(ll*0.6);
+      const br=1.5+Math.random()*3;
+      ctx.beginPath();ctx.arc(bx2,by2,br,0,Math.PI*2);
+      ctx.strokeStyle=hexToRgba(rgbToHex(warmColor(sol.color_liq[0],0.5)),0.65);
+      ctx.lineWidth=1;ctx.stroke();
+    }
+  }
+
+  // 파티클
+  const mxL=Math.min(simState.liquid,90), mxG=Math.min(simState.gas,40);
+  let lps=simState.particles.filter(p=>p.type==='liquid');
+  let gps=simState.particles.filter(p=>p.type==='gas');
+  while(lps.length>mxL){const i=simState.particles.indexOf(lps.pop());if(i>-1)simState.particles.splice(i,1);}
+  while(lps.length<mxL&&simState.liquid>0){const p=new Particle('liquid');simState.particles.push(p);lps.push(p);}
+  while(gps.length>mxG){const i=simState.particles.indexOf(gps.pop());if(i>-1)simState.particles.splice(i,1);}
+  while(gps.length<mxG&&simState.gas>0){const p=new Particle('gas');simState.particles.push(p);gps.push(p);}
+  simState.particles.forEach(p=>{p.update();p.draw(ctx);});
+
+  // 병 외곽선
+  ctx.strokeStyle=hexToRgba(rgbToHex(warmColor(sol.color_theme,t01*0.4)),0.5);
+  ctx.lineWidth=2.2;ctx.beginPath();ctx.roundRect(bx,by,bw,bh,[6,6,12,12]);ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,0.04)';ctx.beginPath();ctx.roundRect(bx+4,by+4,8,bh-8,4);ctx.fill();
+
+  // 뚜껑
+  drawLid(ctx,bx,by,bw,t01,sol);
+
+  // 라벨
+  ctx.fillStyle=hexToRgba(sol.color_theme,0.75);
+  ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`🌡${TEMP_C}°C`,bx+bw/2,by+18);
+  ctx.fillStyle='rgba(180,220,255,0.6)';ctx.font='9px sans-serif';
+  ctx.textAlign='left';ctx.fillText(`💧${simState.liquid}`,bx+5,ch-18);
+  ctx.textAlign='right';ctx.fillText(`☁️${simState.gas}`,bx+bw-5,by+36);
+
+  // 일시정지 시 속도 표시
+  if(isPaused){
+    ctx.fillStyle='rgba(255,200,80,0.7)';
+    ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⏸ PAUSED',bx+bw/2,ch-18);
+  } else if(simSpeed>1){
+    ctx.fillStyle='rgba(255,200,80,0.6)';
+    ctx.font='bold 9px sans-serif';ctx.textAlign='center';
+    ctx.fillText(`${simSpeed}× 속도`,bx+bw/2,ch-18);
+  }
+}
+
+function drawLid(ctx,bx,by,bw,t01,sol){
+  const lx=bx+bw*0.18,lw=bw*0.64,ly=by-22,lh=22;
+  if(!lidOpen){
+    const gr=ctx.createLinearGradient(lx,ly,lx,ly+lh);
+    gr.addColorStop(0,'rgba(60,200,100,0.9)');gr.addColorStop(1,'rgba(20,120,60,0.9)');
+    ctx.fillStyle=gr;ctx.strokeStyle='#5fffaa';ctx.lineWidth=1.8;
+    ctx.beginPath();ctx.roundRect(lx,ly,lw,lh,5);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1;
+    for(let i=0;i<4;i++){const sx=lx+6+i*(lw-12)/3;ctx.beginPath();ctx.moveTo(sx,ly+4);ctx.lineTo(sx,ly+lh-4);ctx.stroke();}
+    ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
+    ctx.fillText('SEALED',bx+bw/2,ly+14);
+  } else {
+    ctx.save();ctx.translate(lx+lw/2,ly+lh/2);ctx.rotate(-0.25);
+    const gr=ctx.createLinearGradient(-lw/2,-lh/2,lw/2,lh/2);
+    gr.addColorStop(0,'rgba(220,60,60,0.85)');gr.addColorStop(1,'rgba(140,30,30,0.85)');
+    ctx.fillStyle=gr;ctx.strokeStyle='#ff7777';ctx.lineWidth=1.8;
+    ctx.beginPath();ctx.roundRect(-lw/2-15,-lh/2-8,lw+10,lh,5);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
+    ctx.fillText('OPEN',0,4);ctx.restore();
+    if(simState.gas>2&&!isPaused){
+      const nA=Math.min(7,2+Math.floor(t01*6));
+      for(let i=0;i<nA;i++){
+        const ax=bx+bw*0.15+i*(bw*0.7/(nA-1||1));
+        const asc=12+t01*10;
+        ctx.strokeStyle=hexToRgba(sol.color_theme,0.55+t01*0.3);
+        ctx.lineWidth=1.2+t01*0.6;
+        ctx.beginPath();ctx.moveTo(ax,ly-2);ctx.lineTo(ax,ly-2-asc);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(ax-3,ly-2-asc+5);ctx.lineTo(ax,ly-2-asc-3);ctx.lineTo(ax+3,ly-2-asc+5);ctx.stroke();
+      }
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  시뮬레이션 스텝 (공통 로직)
+// ══════════════════════════════════════════════════
+function runSimStep(){
+  const sol=SOLUTIONS[curSolIdx];
+  const ef=evapFactor(sol,TEMP_C);
+  const cf=condFactor(sol,TEMP_C);
+  const bpRatio=TEMP_C/sol.bp;
+  const boostE=bpRatio>=1?3.5+(bpRatio-1)*4:bpRatio>=0.8?1+(bpRatio-0.8)*12:1;
+
+  const ep=lidOpen?sol.evap_base*ef*2.8*boostE:sol.evap_base*ef*boostE;
+  let evap=Math.round(simState.liquid*ep);
+  evap=Math.max(0,Math.min(evap,simState.liquid));
+
+  let cond=0;
+  if(!lidOpen){
+    cond=Math.round(simState.gas*simState.gas*sol.cond_k*cf);
+    cond=Math.max(0,Math.min(cond,simState.gas));
+  } else {
+    const escRate=Math.min(0.92,GAS_ESC+Math.min(TEMP_C/100,1)*0.55);
+    const esc=Math.ceil(simState.gas*escRate);
+    simState.gas=Math.max(0,simState.gas-esc);
+  }
+
+  const net=evap-cond;
+  simState.liquid=Math.max(0,Math.min(MAX_LIQ,simState.liquid-net));
+  if(!lidOpen){
+    simState.gas=Math.max(0,Math.min(MAX_GAS,simState.gas+net));
+  } else {
+    const visCap=Math.round(3+Math.min(TEMP_C/100,1)*7);
+    simState.gas=Math.max(0,Math.min(visCap,simState.gas+evap));
+  }
+  simState.evapRate=evap;
+  simState.condRate=cond;
+
+  const h=simState.history;
+  h.liquid.push(simState.liquid);h.gas.push(simState.gas);
+  h.evap.push(evap);h.cond.push(cond);
+  if(h.liquid.length>HIST_LEN){h.liquid.shift();h.gas.shift();h.evap.shift();h.cond.shift();}
+}
+
+// ══════════════════════════════════════════════════
+//  UI 업데이트
+// ══════════════════════════════════════════════════
+function updateUI(){
+  document.getElementById('ms-liq').textContent  = simState.liquid;
+  document.getElementById('ms-gas').textContent  = simState.gas;
+  document.getElementById('ms-evap').textContent = simState.evapRate.toFixed(1);
+  document.getElementById('ms-cond').textContent = simState.condRate.toFixed(1);
+
+  const keq=simState.liquid>0?(simState.gas/simState.liquid).toFixed(4):'∞';
+  document.getElementById('ms-keq').textContent=keq;
+
+  const mx=20;
+  document.getElementById('rb-evap').style.width=Math.min(100,(simState.evapRate/mx)*100)+'%';
+  document.getElementById('rb-cond').style.width=Math.min(100,(simState.condRate/mx)*100)+'%';
+
+  const sb=document.getElementById('state-badge');
+  if(isPaused){
+    sb.textContent='⏸ 일시정지됨'; sb.className='state-badge state-pause'; return;
+  }
+  const diff=Math.abs(simState.evapRate-simState.condRate);
+  if(lidOpen){sb.textContent='🔓 개방 — 지속 증발';sb.className='state-badge state-ev';}
+  else if(!lidOpen&&diff<=1&&simState.gas>4){sb.textContent='⚖ 동적 평형 달성!';sb.className='state-badge state-eq';}
+  else if(simState.condRate>simState.evapRate){sb.textContent='📉 응결 우세';sb.className='state-badge state-cn';}
+  else{sb.textContent='📈 증발 우세';sb.className='state-badge state-ev';}
+
+  const sol=SOLUTIONS[curSolIdx];
+  const qi=document.getElementById('quick-info');
+  if(TEMP_C>=sol.bp) qi.textContent=`🔥 ${sol.name} 비등점 초과! 빠르게 기화 중`;
+  else if(TEMP_C>=sol.bp*0.75) qi.textContent=`♨️ 비등점(${sol.bp}°C) 근접 — 증발 급증`;
+  else if(!lidOpen) qi.textContent=`🔓 개방 용기 — 기체가 외부로 탈출`;
+  else qi.textContent=`온도를 올리거나 뚜껑을 열어 실험해보세요`;
+
+  document.getElementById('leg-liq-dot').style.background=sol.color_liq[0];
+  document.getElementById('leg-gas-dot').style.background=sol.color_gas[0].replace(/,[\d.]+\)$/,',0.9)');
+}
+
+// ══════════════════════════════════════════════════
+//  그래프
+// ══════════════════════════════════════════════════
+const GP={l:36,r:8,t:8,b:20};
+
+function drawGraphBase(ctx,w,h,maxVal){
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(0,0,w,h);
+  const pw=w-GP.l-GP.r,ph=h-GP.t-GP.b;
+  ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=GP.t+ph*(i/4);
+    ctx.beginPath();ctx.moveTo(GP.l,y);ctx.lineTo(GP.l+pw,y);ctx.stroke();
+    ctx.fillStyle='rgba(180,200,220,0.5)';ctx.font='8px sans-serif';ctx.textAlign='right';
+    ctx.fillText((maxVal*(1-i/4)).toFixed(maxVal<2?2:0),GP.l-3,y+3);
+  }
+  // 일시정지 표시 (그래프 위에)
+  if(isPaused){
+    ctx.fillStyle='rgba(255,200,80,0.08)';ctx.fillRect(GP.l,GP.t,pw,ph);
+    ctx.fillStyle='rgba(255,200,80,0.3)';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⏸ PAUSED',GP.l+pw/2,GP.t+ph/2+4);
+  }
+}
+
+function drawLineGraph(ctx,data,maxVal,color,w,h,lw=2){
+  if(data.length<2) return;
+  const pw=w-GP.l-GP.r,ph=h-GP.t-GP.b;
+  ctx.strokeStyle=color;ctx.lineWidth=lw;
+  ctx.shadowColor=color;ctx.shadowBlur=3;
+  ctx.beginPath();
+  data.forEach((v,i)=>{
+    const x=GP.l+(i/(HIST_LEN-1))*pw;
+    const y=GP.t+ph*(1-Math.min(1,v/maxVal));
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();ctx.shadowBlur=0;
+}
+
+function drawAllGraphs(){
+  const sol=SOLUTIONS[curSolIdx];
+  const w1=gcMol.width,h1=gcMol.height;
+  drawGraphBase(ctxMol,w1,h1,MAX_LIQ);
+  drawLineGraph(ctxMol,simState.history.liquid,MAX_LIQ,sol.color_liq[0],w1,h1,2);
+  drawLineGraph(ctxMol,simState.history.gas,MAX_LIQ,sol.color_gas[0].replace(/,[\d.]+\)$/,',1)'),w1,h1,2);
+  const w2=gcRate.width,h2=gcRate.height;
+  const mx2=Math.max(...simState.history.evap,...simState.history.cond,1)*1.1;
+  drawGraphBase(ctxRate,w2,h2,mx2);
+  drawLineGraph(ctxRate,simState.history.evap,mx2,'#ff9a3c',w2,h2,2);
+  drawLineGraph(ctxRate,simState.history.cond,mx2,'#4ecdc4',w2,h2,2);
+  drawKeqGraph();
+}
+
+function drawKeqGraph(){
+  const sol=SOLUTIONS[curSolIdx];
+  const ctx=ctxKeq,w=gcKeq.width,h=gcKeq.height;
+  const pw=w-GP.l-GP.r,ph=h-GP.t-GP.b;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(0,0,w,h);
+  const tMax=Math.max(100,sol.bp*1.3);
+  const kVals=[];
+  for(let t=0;t<=tMax;t+=tMax/100) kVals.push(calcKeq(sol,t));
+  const kMax=Math.max(...kVals)*1.1;
+  ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=GP.t+ph*(i/4);
+    ctx.beginPath();ctx.moveTo(GP.l,y);ctx.lineTo(GP.l+pw,y);ctx.stroke();
+    ctx.fillStyle='rgba(180,200,220,0.5)';ctx.font='8px sans-serif';ctx.textAlign='right';
+    ctx.fillText((kMax*(1-i/4)).toFixed(3),GP.l-3,y+3);
+  }
+  [0,0.25,0.5,0.75,1].forEach(f=>{
+    const x=GP.l+f*pw;
+    ctx.fillStyle='rgba(180,200,220,0.4)';ctx.font='8px sans-serif';ctx.textAlign='center';
+    ctx.fillText(Math.round(tMax*f)+'°',x,GP.t+ph+13);
+    ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x,GP.t);ctx.lineTo(x,GP.t+ph);ctx.stroke();
+  });
+  const bpX=GP.l+(sol.bp/tMax)*pw;
+  ctx.strokeStyle=hexToRgba(sol.color_theme,0.4);ctx.lineWidth=1.2;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(bpX,GP.t);ctx.lineTo(bpX,GP.t+ph);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=hexToRgba(sol.color_theme,0.7);ctx.font='8px sans-serif';ctx.textAlign='center';
+  ctx.fillText('bp',bpX,GP.t+ph+13);
+  const grad=ctx.createLinearGradient(GP.l,0,GP.l+pw,0);
+  grad.addColorStop(0,'#6ee7ff');grad.addColorStop(0.5,sol.color_theme);grad.addColorStop(1,'#ff5544');
+  ctx.strokeStyle=grad;ctx.lineWidth=2.2;ctx.shadowColor=sol.color_theme;ctx.shadowBlur=4;
+  ctx.beginPath();
+  kVals.forEach((k,i)=>{
+    const x=GP.l+(i/100)*pw;const y=GP.t+ph*(1-Math.min(1,k/kMax));
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();ctx.shadowBlur=0;
+  const curK=calcKeq(sol,TEMP_C);
+  const cx=GP.l+(Math.min(TEMP_C,tMax)/tMax)*pw;
+  const cy=GP.t+ph*(1-Math.min(1,curK/kMax));
+  ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(cx,GP.t);ctx.lineTo(cx,GP.t+ph);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=getTempColor(TEMP_C);ctx.beginPath();ctx.arc(cx,cy,6,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.8;ctx.stroke();
+  ctx.fillStyle=getTempColor(TEMP_C);ctx.font='bold 9px sans-serif';
+  const lx2=cx+9>GP.l+pw-70?cx-72:cx+9;ctx.textAlign='left';
+  ctx.fillText(`K=${curK.toFixed(4)}`,lx2,cy-5);ctx.fillText(`T=${TEMP_C}°C`,lx2,cy+11);
+  if(isPaused){
+    ctx.fillStyle='rgba(255,200,80,0.08)';ctx.fillRect(GP.l,GP.t,pw,ph);
+    ctx.fillStyle='rgba(255,200,80,0.3)';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⏸ PAUSED',GP.l+pw/2,GP.t+ph/2+4);
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  온도 핸들러
+// ══════════════════════════════════════════════════
+function getTempColor(t){
+  if(t<10) return '#6ee7ff';if(t<35) return '#88ddff';
+  if(t<70) return '#ffdd88';if(t<100) return '#ff9944';
+  return '#ff4444';
+}
+
+function onTempChange(val){
+  TEMP_C=parseInt(val);
+  const col=getTempColor(TEMP_C);
+  const T=TEMP_C+273.15;
+  const sol=SOLUTIONS[curSolIdx];
+  const keq=calcKeq(sol,TEMP_C);
+  const ef=evapFactor(sol,TEMP_C);
+  const cf=condFactor(sol,TEMP_C);
+  const badge=document.getElementById('temp-badge');
+  badge.textContent=`${TEMP_C}°C`;badge.style.color=col;
+  const slider=document.getElementById('temp-slider');
+  const pct=(TEMP_C/parseInt(slider.max))*100;
+  slider.style.background=`linear-gradient(90deg,${col} ${pct}%,rgba(255,255,255,0.12) ${pct}%)`;
+  document.getElementById('ms-kelvin').textContent=T.toFixed(1)+' K';
+  document.getElementById('ms-keq').textContent=keq.toFixed(4);
+  document.getElementById('ms-ef').textContent=ef.toFixed(2)+'×';
+  document.getElementById('ms-cf').textContent=cf.toFixed(2)+'×';
+  document.getElementById('ms-ef').style.color=ef>4?'#ff4444':ef>2?'#ff9944':'#ff9a9a';
+}
+
+// ══════════════════════════════════════════════════
+//  뚜껑 토글
+// ══════════════════════════════════════════════════
+function toggleLid(){
+  lidOpen=!lidOpen;
+  const btn=document.getElementById('lid-btn');
+  if(lidOpen){btn.textContent='🔓 뚜껑 열림 — 클릭하여 닫기';btn.className='lid-btn open';}
+  else{btn.textContent='🔒 뚜껑 닫힘 — 클릭하여 열기';btn.className='lid-btn closed';}
+}
+
+// ══════════════════════════════════════════════════
+//  용액 전환
+// ══════════════════════════════════════════════════
+function buildTabs(){
+  const tabs=document.getElementById('sol-tabs');tabs.innerHTML='';
+  SOLUTIONS.forEach((s,i)=>{
+    const btn=document.createElement('button');
+    btn.className='sol-btn'+(i===curSolIdx?' active':'');
+    btn.textContent=s.emoji+' '+s.name;
+    btn.style.borderColor=i===curSolIdx?s.tab_color:'transparent';
+    btn.style.background=i===curSolIdx?s.tab_bg:'rgba(255,255,255,0.06)';
+    btn.style.color=i===curSolIdx?s.tab_color:'#aac8dd';
+    btn.onclick=()=>selectSolution(i);
+    tabs.appendChild(btn);
+  });
+}
+
+function selectSolution(idx){
+  curSolIdx=idx;const sol=SOLUTIONS[idx];buildTabs();
+  const bar=document.getElementById('sol-info-bar');
+  bar.style.borderColor=sol.border_color;
+  bar.style.background=`linear-gradient(135deg,${sol.bg_grad[0]},${sol.bg_grad[1]})`;
+  document.getElementById('si-title').textContent=sol.emoji+' '+sol.name;
+  document.getElementById('si-title').style.color=sol.color_theme;
+  document.getElementById('si-eq').textContent=sol.formula;
+  document.getElementById('si-bp').textContent=`끓는점: ${sol.bp}°C`;
+  document.getElementById('si-dh').textContent=`ΔH: +${(sol.dh/1000).toFixed(1)} kJ/mol`;
+  document.getElementById('si-desc').textContent=sol.desc;
+  const sliderMax=Math.min(150,Math.round(sol.bp*1.5));
+  const slider=document.getElementById('temp-slider');
+  slider.max=sliderMax;
+  if(TEMP_C>sliderMax){TEMP_C=sliderMax;slider.value=TEMP_C;}
+  resetSim(false);onTempChange(TEMP_C);
+  const bw=document.getElementById('bottle-wrapper');
+  bw.classList.add('switching');setTimeout(()=>bw.classList.remove('switching'),350);
+}
+
+// ══════════════════════════════════════════════════
+//  리셋
+// ══════════════════════════════════════════════════
+function resetSim(full=true){
+  simState.liquid=130;simState.gas=0;simState.evapRate=0;simState.condRate=0;
+  simState.history={liquid:[],gas:[],evap:[],cond:[]};
+  if(full){
+    lidOpen=false;isPaused=false;
+    const btn=document.getElementById('lid-btn');
+    btn.textContent='🔒 뚜껑 닫힘 — 클릭하여 열기';btn.className='lid-btn closed';
+    applyPauseUI();
+  }
+  initParticles();
+}
+
+// ══════════════════════════════════════════════════
+//  메인 루프 (속도 반영)
+// ══════════════════════════════════════════════════
+let lastSimTime = 0;
+let accumulated = 0;   // 누적된 미처리 시간
+
+function loop(ts){
+  // 렌더링은 항상
+  drawBottle();
+
+  if(!isPaused){
+    const delta = ts - (lastSimTime||ts);
+    lastSimTime = ts;
+
+    // 속도에 맞는 실제 스텝 간격
+    const stepMs = BASE_MS / simSpeed;
+
+    accumulated += delta;
+
+    // 누적 시간이 스텝 간격 이상이면 스텝 실행
+    // 단, 한 프레임에 최대 8스텝 (8× 속도 대응)
+    let steps = 0;
+    while(accumulated >= stepMs && steps < 8){
+      runSimStep();
+      accumulated -= stepMs;
+      steps++;
+    }
+
+    if(steps > 0){
+      updateUI();
+      drawAllGraphs();
+    }
+  } else {
+    lastSimTime = ts;
+    accumulated = 0;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ══════════════════════════════════════════════════
+//  초기화
+// ══════════════════════════════════════════════════
+setTimeout(()=>{
+  resizeAll();
+  buildTabs();
+  selectSolution(0);
+  const slider=document.getElementById('temp-slider');
+  slider.value=25;onTempChange(25);
+  setSpeed(1);
+  requestAnimationFrame(loop);
+},180);
+</script>
+</body>
+</html>
